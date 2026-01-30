@@ -1,0 +1,130 @@
+/**
+ * Error Handling Utilities
+ *
+ * Custom error classes and error handling helpers for YouTube API.
+ */
+
+/**
+ * Base YouTube API error
+ */
+export class YouTubeApiError extends Error {
+  public statusCode?: number;
+  public code: string;
+  public retryable: boolean;
+
+  constructor(message: string, statusCode?: number, code?: string, retryable = false) {
+    super(message);
+    this.name = 'YouTubeApiError';
+    this.statusCode = statusCode;
+    this.code = code || 'YOUTUBE_ERROR';
+    this.retryable = retryable;
+  }
+}
+
+/**
+ * Rate limit exceeded error
+ */
+export class RateLimitError extends YouTubeApiError {
+  public retryAfterSeconds: number;
+
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message, 429, 'RATE_LIMIT_EXCEEDED', true);
+    this.name = 'RateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/**
+ * Authentication error
+ */
+export class AuthenticationError extends YouTubeApiError {
+  constructor(message: string) {
+    super(message, 401, 'AUTHENTICATION_FAILED', false);
+    this.name = 'AuthenticationError';
+  }
+}
+
+/**
+ * Forbidden error (insufficient permissions)
+ */
+export class ForbiddenError extends YouTubeApiError {
+  constructor(message: string) {
+    super(message, 403, 'FORBIDDEN', false);
+    this.name = 'ForbiddenError';
+  }
+}
+
+/**
+ * Not found error
+ */
+export class NotFoundError extends YouTubeApiError {
+  constructor(entityType: string, id: string) {
+    super(`${entityType} with ID '${id}' not found`, 404, 'NOT_FOUND', false);
+    this.name = 'NotFoundError';
+  }
+}
+
+/**
+ * Validation error
+ */
+export class ValidationError extends YouTubeApiError {
+  public details: Record<string, string[]>;
+
+  constructor(message: string, details: Record<string, string[]> = {}) {
+    super(message, 400, 'VALIDATION_ERROR', false);
+    this.name = 'ValidationError';
+    this.details = details;
+  }
+}
+
+/**
+ * Quota exceeded error
+ */
+export class QuotaExceededError extends YouTubeApiError {
+  constructor(message: string) {
+    super(message, 403, 'QUOTA_EXCEEDED', false);
+    this.name = 'QuotaExceededError';
+  }
+}
+
+/**
+ * Check if an error is retryable
+ */
+export function isRetryableError(error: unknown): boolean {
+  if (error instanceof YouTubeApiError) {
+    return error.retryable;
+  }
+  if (error instanceof Error) {
+    return (
+      error.message.includes('network') ||
+      error.message.includes('timeout') ||
+      error.message.includes('ECONNRESET')
+    );
+  }
+  return false;
+}
+
+/**
+ * Format an error for logging
+ */
+export function formatErrorForLogging(error: unknown): Record<string, unknown> {
+  if (error instanceof YouTubeApiError) {
+    return {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      retryable: error.retryable,
+      ...(error instanceof RateLimitError && { retryAfterSeconds: error.retryAfterSeconds }),
+      ...(error instanceof ValidationError && { details: error.details }),
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return { error: String(error) };
+}
